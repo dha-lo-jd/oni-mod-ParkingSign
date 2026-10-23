@@ -71,6 +71,7 @@ public sealed class ParkingSignController : KMonoBehaviour, ISaveLoadable, ISim1
         if (logicPorts == null || animController == null || selectable == null || prioritizable == null)
         {
             Debug.LogError(
+                "[ParkingSign] " +
                 $"Parking Sign '{name}' is missing a required logic port, animation controller, selectable, or prioritizable.");
             return;
         }
@@ -94,28 +95,11 @@ public sealed class ParkingSignController : KMonoBehaviour, ISaveLoadable, ISim1
     {
         destination = null;
         offsets = null;
-        KPrefabID minionPrefabId = minion != null ? minion.GetComponent<KPrefabID>() : null;
-        if (minionPrefabId == null)
-        {
-            return false;
-        }
 
-        ParkingSignController winningSign = FindWinningReachableSign(minion);
-        SetWinningSign(minionPrefabId.InstanceID, winningSign);
-        Building building = winningSign != null ? winningSign.GetComponent<Building>() : null;
-        int targetCell = winningSign != null ? winningSign.targetCell : Grid.InvalidCell;
-        if (building == null || !Grid.IsValidCell(targetCell))
-        {
-            return false;
-        }
-
-        destination = building;
-        Grid.CellToXY(Grid.PosToCell(winningSign.gameObject), out int signX, out int signY);
-        Grid.CellToXY(targetCell, out int targetX, out int targetY);
-        offsets = targetCell == Grid.PosToCell(winningSign.gameObject)
-            ? SignTargetOffsets
-            : new[] { new CellOffset(targetX - signX, targetY - signY) };
-        return true;
+        // Redirecting a chore's destination makes it believe it arrived and work from the wrong cell.
+        // The winner is only recomputed on explicit reconciles: re-evaluating it here used stale path
+        // probes and flipped the cache back to a lower-priority sign.
+        return false;
     }
 
     internal static bool ShouldBlockPathFromSign(MinionIdentity minion, int destinationCell)
@@ -133,8 +117,51 @@ public sealed class ParkingSignController : KMonoBehaviour, ISaveLoadable, ISim1
         }
 
         ParkingSignController winningSign = GetCachedWinningSign(minionPrefabId.InstanceID);
-        int winningSignCell = winningSign != null ? winningSign.targetCell : Grid.InvalidCell;
-        return Grid.IsValidCell(winningSignCell) && currentCell == winningSignCell;
+        return IsBlockingGuidanceCell(winningSign, currentCell, destinationCell);
+    }
+
+    private static bool IsBlockingGuidanceCell(ParkingSignController winningSign, int fromCell, int destinationCell)
+    {
+        if (winningSign == null || !Grid.IsValidCell(winningSign.targetCell) ||
+            fromCell != winningSign.targetCell)
+        {
+            return false;
+        }
+
+        // At the guidance cell, only work doable in place stays reachable; everything else is blocked.
+        return true;
+    }
+
+    internal static bool TryGetGuidanceCell(GameObject minionObject, out int guidanceCell)
+    {
+        guidanceCell = Grid.InvalidCell;
+        KPrefabID prefabId = minionObject != null ? minionObject.GetComponent<KPrefabID>() : null;
+        if (prefabId == null || minionObject.GetComponent<MinionIdentity>() == null)
+        {
+            return false;
+        }
+
+        ParkingSignController winningSign = GetCachedWinningSign(prefabId.InstanceID);
+        if (winningSign == null || !Grid.IsValidCell(winningSign.targetCell))
+        {
+            return false;
+        }
+
+        guidanceCell = winningSign.targetCell;
+        return true;
+    }
+
+    internal static bool IsHeadingToGuidanceCell(GameObject minionObject)
+    {
+        return TryGetGuidanceCell(minionObject, out int guidanceCell) &&
+               Grid.PosToCell(minionObject) != guidanceCell;
+    }
+
+    private static string GetChoreName(MinionIdentity minion)
+    {
+        ChoreDriver choreDriver = minion != null ? minion.GetComponent<ChoreDriver>() : null;
+        Chore chore = choreDriver != null ? choreDriver.GetCurrentChore() : null;
+        return chore != null && chore.choreType != null ? chore.choreType.Id : "none";
     }
 
     internal static bool ShouldBlockPathFromSign(int proxyInstanceId, int fromCell, int destinationCell)
@@ -150,8 +177,7 @@ public sealed class ParkingSignController : KMonoBehaviour, ISaveLoadable, ISim1
         }
 
         ParkingSignController winningSign = GetCachedWinningSignForProxy(proxyInstanceId);
-        int winningSignCell = winningSign != null ? winningSign.targetCell : Grid.InvalidCell;
-        return Grid.IsValidCell(winningSignCell) && fromCell == winningSignCell;
+        return IsBlockingGuidanceCell(winningSign, fromCell, destinationCell);
     }
 
     private void RefreshSelectedProxyInstanceIds()
@@ -280,7 +306,12 @@ public sealed class ParkingSignController : KMonoBehaviour, ISaveLoadable, ISim1
     private static void ReconcileMinionAssignment(int instanceId)
     {
         MinionIdentity minion = FindMinion(instanceId);
+        ParkingSignController previousSign = GetCachedWinningSign(instanceId);
         ParkingSignController winningSign = FindWinningReachableSign(minion);
+        Debug.LogWarning($"[ParkingSign] Reconcile: minion={(minion != null ? minion.GetProperName() : "?")} " +
+                         $"cell={(minion != null ? Grid.PosToCell(minion.gameObject) : -1)} " +
+                         $"previous={DescribeSign(previousSign)} winner={DescribeSign(winningSign)} " +
+                         $"chore={GetChoreName(minion)}");
         SetWinningSign(instanceId, winningSign);
         if (winningSign == null)
         {
@@ -301,6 +332,13 @@ public sealed class ParkingSignController : KMonoBehaviour, ISaveLoadable, ISim1
         }
 
         winningSign.MoveMinionToSign(instanceId);
+    }
+
+    private static string DescribeSign(ParkingSignController sign)
+    {
+        return sign == null
+            ? "none"
+            : $"{sign.name}#{sign.spawnOrder}(target={sign.targetCell},prio={sign.Priority.priority_value})";
     }
 
     private static ParkingSignController FindWinningReachableSign(MinionIdentity minion)
@@ -339,8 +377,12 @@ public sealed class ParkingSignController : KMonoBehaviour, ISaveLoadable, ISim1
                 }
 
                 int signTargetCell = sign.targetCell;
+                bool canReach = Grid.IsValidCell(signTargetCell) && navigator.CanReach(signTargetCell);
+                Debug.LogWarning($"[ParkingSign] Candidate: minion={minion.GetProperName()} sign={DescribeSign(sign)} " +
+                                 $"canReach={canReach} probeBlocked={probeBlocked} cached={DescribeSign(cachedWinner)}");
                 if (Grid.IsValidCell(signTargetCell) &&
-                    (navigator.CanReach(signTargetCell) || probeBlocked && sign != cachedWinner) &&
+                    (currentCell == signTargetCell || canReach ||
+                     probeBlocked && sign != cachedWinner) &&
                     HasHigherPrecedence(sign, winner))
                 {
                     winner = sign;
@@ -449,30 +491,53 @@ public sealed class ParkingSignController : KMonoBehaviour, ISaveLoadable, ISim1
             return;
         }
 
+        Debug.LogWarning($"[ParkingSign] MoveMinionToSign: sign={name} isHanging={isHanging} " +
+                  $"minion={minion.GetProperName()} minionCell={Grid.PosToCell(minion.gameObject)} " +
+                  $"targetCell={targetCell} signCell={Grid.PosToCell(gameObject)}");
+
         Navigator navigator = minion.GetComponent<Navigator>();
         if (navigator == null)
         {
-            Debug.LogWarning($"Parking Sign cannot move {minion.GetProperName()}: no Navigator component.");
+            Debug.LogWarning($"[ParkingSign] Cannot move {minion.GetProperName()}: no Navigator component.");
             return;
         }
 
         if (!Grid.IsValidCell(targetCell))
         {
-            Debug.LogWarning($"Parking Sign '{name}' has an invalid destination cell.");
+            Debug.LogWarning($"[ParkingSign] '{name}' has an invalid destination cell.");
             return;
         }
 
         MoveToLocationMonitor.Instance moveMonitor =
             navigator.GetSMI<MoveToLocationMonitor.Instance>();
-        if (moveMonitor != null)
+        if (moveMonitor == null)
         {
-            moveMonitor.MoveToLocation(targetCell);
+            Debug.LogWarning($"[ParkingSign] Cannot move {minion.GetProperName()}: move monitor is unavailable.");
+            return;
+        }
+
+        // Re-issuing the move while already at or heading to the guidance cell cancels the
+        // duplicant's current chore each reconcile, so only command it when needed.
+        bool alreadyAtTarget = Grid.PosToCell(minion.gameObject) == targetCell;
+        ChoreDriver currentDriver = minion.GetComponent<ChoreDriver>();
+        Chore currentChore = currentDriver != null ? currentDriver.GetCurrentChore() : null;
+        bool alreadyHeadingThere = currentChore != null &&
+                                   currentChore.choreType == Db.Get().ChoreTypes.MoveTo &&
+                                   moveMonitor.targetCell == targetCell;
+        if (alreadyAtTarget || alreadyHeadingThere)
+        {
             commandedMinionInstanceIds.Add(instanceId);
+            return;
         }
-        else
+
+        ChoreDriver choreDriver = minion.GetComponent<ChoreDriver>();
+        if (choreDriver != null && choreDriver.HasChore())
         {
-            Debug.LogWarning($"Parking Sign cannot move {minion.GetProperName()}: move monitor is unavailable.");
+            choreDriver.StopChore();
         }
+
+        moveMonitor.MoveToLocation(targetCell);
+        commandedMinionInstanceIds.Add(instanceId);
     }
 
     private void ReleaseMinion(int instanceId)
@@ -487,6 +552,9 @@ public sealed class ParkingSignController : KMonoBehaviour, ISaveLoadable, ISim1
         {
             return;
         }
+
+        Debug.LogWarning($"[ParkingSign] ReleaseMinion: sign={name} minion={minion.GetProperName()} " +
+                         $"cell={Grid.PosToCell(minion.gameObject)} targetCell={targetCell} signCell={Grid.PosToCell(gameObject)}");
 
         Navigator navigator = minion.GetComponent<Navigator>();
         MoveToLocationMonitor.Instance moveMonitor =
@@ -529,6 +597,16 @@ public sealed class ParkingSignController : KMonoBehaviour, ISaveLoadable, ISim1
         if (previous != targetCell)
         {
             ReconcileSelectedMinions();
+        }
+
+        foreach (int instanceId in selectedMinionInstanceIds)
+        {
+            MinionIdentity member = FindMinion(instanceId);
+            if (member != null)
+            {
+                Debug.LogWarning($"[ParkingSign] Tick: sign={name} minion={member.GetProperName()} " +
+                                 $"cell={Grid.PosToCell(member.gameObject)} targetCell={targetCell} chore={GetChoreName(member)}");
+            }
         }
 
         UpdateGhost(IsSelected());
@@ -614,7 +692,7 @@ public sealed class ParkingSignController : KMonoBehaviour, ISaveLoadable, ISim1
 
     private void UpdateGhost(bool show)
     {
-        if (!show || !Grid.IsValidCell(targetCell))
+        if (!show || !isHanging || !Grid.IsValidCell(targetCell))
         {
             if (ghost != null)
             {
@@ -658,7 +736,7 @@ public sealed class ParkingSignController : KMonoBehaviour, ISaveLoadable, ISim1
             return root;
         }
 
-        Debug.LogWarning("Parking Sign: ui_duplicant_any_selection unavailable, using animation ghost.");
+        Debug.LogWarning("[ParkingSign] ui_duplicant_any_selection unavailable, using animation ghost.");
         return CreateAnimGhost();
     }
 
@@ -668,7 +746,7 @@ public sealed class ParkingSignController : KMonoBehaviour, ISaveLoadable, ISim1
         KAnimFile anim = Assets.GetAnim("anim_idles_default_kanim");
         if (build == null || anim == null)
         {
-            Debug.LogWarning("Parking Sign: Duplicant animation unavailable, using fallback silhouette.");
+            Debug.LogWarning("[ParkingSign] Duplicant animation unavailable, using fallback silhouette.");
             return CreateSpriteGhost();
         }
 
@@ -690,7 +768,7 @@ public sealed class ParkingSignController : KMonoBehaviour, ISaveLoadable, ISim1
         Shader shader = Shader.Find("Sprites/Default") ?? Shader.Find("UI/Default");
         if (shader == null)
         {
-            Debug.LogWarning("Parking Sign: no shader available for the Duplicant silhouette.");
+            Debug.LogWarning("[ParkingSign] no shader available for the Duplicant silhouette.");
             return null;
         }
 

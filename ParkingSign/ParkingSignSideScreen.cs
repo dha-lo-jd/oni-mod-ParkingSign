@@ -122,7 +122,7 @@ public sealed class ParkingSignSideScreen : SideScreenContent
         GameObject parent = ContentContainer != null ? ContentContainer : gameObject;
         if (parent == null)
         {
-            Debug.LogError("Parking Sign side screen has no UI parent to attach its duplicant list.");
+            Debug.LogError("[ParkingSign] Parking Sign side screen has no UI parent to attach its duplicant list.");
             return;
         }
 
@@ -139,7 +139,7 @@ public sealed class ParkingSignSideScreen : SideScreenContent
         GameObject portraitPrefab = Assets.GetPrefab(MinionUIPortrait.ID);
         if (portraitPrefab == null)
         {
-            Debug.LogError("Could not find the game's duplicant UI portrait prefab.");
+            Debug.LogError("[ParkingSign] Could not find the game's duplicant UI portrait prefab.");
             return;
         }
 

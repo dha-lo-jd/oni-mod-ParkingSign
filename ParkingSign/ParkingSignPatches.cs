@@ -116,11 +116,75 @@ public static class Navigator_CanReach_ParkingSign_Patch
     }
 }
 
+[HarmonyPatch(typeof(MoveToLocationMonitor.Instance), nameof(MoveToLocationMonitor.Instance.MoveToLocation))]
+public static class MoveToLocationMonitor_MoveToLocation_ParkingSign_Patch
+{
+    public static void Prefix(MoveToLocationMonitor.Instance __instance, ref int cell)
+    {
+        if (ParkingSignController.TryGetGuidanceCell(__instance.gameObject, out int guidanceCell) &&
+            cell != guidanceCell)
+        {
+            Debug.LogWarning($"[ParkingSign] MoveToLocation overridden: requested={cell} guidance={guidanceCell}");
+            cell = guidanceCell;
+        }
+    }
+}
+
+[HarmonyPatch(typeof(ChoreConsumer), nameof(ChoreConsumer.FindNextChore))]
+public static class ChoreConsumer_FindNextChore_ParkingSign_Patch
+{
+    public static void Postfix(ChoreConsumer __instance, ref bool __result, ref Chore.Precondition.Context out_context)
+    {
+        if (!ParkingSignController.TryGetGuidanceCell(__instance.gameObject, out int guidanceCell) ||
+            Grid.PosToCell(__instance.gameObject) == guidanceCell)
+        {
+            return;
+        }
+
+        if (__result && out_context.chore != null)
+        {
+            if (out_context.chore.choreType == Db.Get().ChoreTypes.MoveTo)
+            {
+                return;
+            }
+
+            __result = false;
+        }
+
+        ChoreDriver choreDriver = __instance.gameObject.GetComponent<ChoreDriver>();
+        if (choreDriver == null || choreDriver.GetCurrentChore() != null)
+        {
+            return;
+        }
+
+        Navigator navigator = __instance.gameObject.GetComponent<Navigator>();
+        MoveToLocationMonitor.Instance moveMonitor =
+            navigator != null ? navigator.GetSMI<MoveToLocationMonitor.Instance>() : null;
+        if (moveMonitor != null)
+        {
+            moveMonitor.MoveToLocation(guidanceCell);
+        }
+    }
+}
+
+[HarmonyPatch(typeof(ChoreDriver), nameof(ChoreDriver.SetChore))]
+public static class ChoreDriver_SetChore_ParkingSign_Patch
+{
+    public static bool Prefix(ChoreDriver __instance, Chore.Precondition.Context context)
+    {
+        if (context.chore == null || context.chore.choreType == Db.Get().ChoreTypes.MoveTo ||
+            !ParkingSignController.IsHeadingToGuidanceCell(__instance.gameObject))
+        {
+            return true;
+        }
+
+        return false;
+    }
+}
+
 [HarmonyPatch(typeof(Navigator), nameof(Navigator.AdvancePath))]
 public static class Navigator_AdvancePath_ParkingSign_Patch
 {
-    private static readonly HashSet<Navigator> RedirectedAdvances = new HashSet<Navigator>();
-
     private static readonly PropertyInfo TargetOffsetsProperty =
         AccessTools.Property(typeof(Navigator), nameof(Navigator.targetOffsets));
 
@@ -130,7 +194,6 @@ public static class Navigator_AdvancePath_ParkingSign_Patch
         public CellOffset[] Offsets;
         public KMonoBehaviour ForcedTarget;
         public bool WasForced;
-        public bool WasRedirected;
     }
 
     public static void Prefix(Navigator __instance, out OriginalDestination __state)
@@ -147,14 +210,6 @@ public static class Navigator_AdvancePath_ParkingSign_Patch
         __state.Offsets = __instance.targetOffsets;
         __state.ForcedTarget = destination;
         __state.WasForced = true;
-        __state.WasRedirected = __instance.target != null &&
-                                Grid.PosToCell(__instance.target.gameObject) !=
-                                Grid.PosToCell(destination.gameObject);
-        if (__state.WasRedirected)
-        {
-            RedirectedAdvances.Add(__instance);
-        }
-
         __instance.target = destination;
         TargetOffsetsProperty.SetValue(__instance, offsets);
     }
@@ -166,11 +221,6 @@ public static class Navigator_AdvancePath_ParkingSign_Patch
             return __exception;
         }
 
-        if (__state.WasRedirected)
-        {
-            RedirectedAdvances.Remove(__instance);
-        }
-
         if (__instance.target == __state.ForcedTarget)
         {
             __instance.target = __state.Target;
@@ -178,30 +228,5 @@ public static class Navigator_AdvancePath_ParkingSign_Patch
         }
 
         return __exception;
-    }
-
-    internal static bool IsRedirectedAdvance(Navigator navigator)
-    {
-        return navigator != null && RedirectedAdvances.Contains(navigator);
-    }
-}
-
-[HarmonyPatch]
-public static class Navigator_Stop_ParkingSign_Patch
-{
-    private static MethodBase TargetMethod()
-    {
-        return AccessTools.Method(typeof(Navigator), nameof(Navigator.Stop), new[] { typeof(bool), typeof(bool) });
-    }
-
-    public static void Prefix(Navigator __instance, ref bool arrived_at_destination)
-    {
-        if (!arrived_at_destination ||
-            !Navigator_AdvancePath_ParkingSign_Patch.IsRedirectedAdvance(__instance))
-        {
-            return;
-        }
-
-        arrived_at_destination = false;
     }
 }
