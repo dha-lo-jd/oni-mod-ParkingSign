@@ -1,5 +1,3 @@
-using System;
-using System.Collections.Generic;
 using HarmonyLib;
 using PeterHan.PLib.UI;
 using System.Reflection;
@@ -124,7 +122,7 @@ public static class MoveToLocationMonitor_MoveToLocation_ParkingSign_Patch
         if (ParkingSignController.TryGetGuidanceCell(__instance.gameObject, out int guidanceCell) &&
             cell != guidanceCell)
         {
-            Debug.LogWarning($"[ParkingSign] MoveToLocation overridden: requested={cell} guidance={guidanceCell}");
+            ParkingSignLog.Trace($"MoveToLocation overridden: requested={cell} guidance={guidanceCell}");
             cell = guidanceCell;
         }
     }
@@ -179,54 +177,5 @@ public static class ChoreDriver_SetChore_ParkingSign_Patch
         }
 
         return false;
-    }
-}
-
-[HarmonyPatch(typeof(Navigator), nameof(Navigator.AdvancePath))]
-public static class Navigator_AdvancePath_ParkingSign_Patch
-{
-    private static readonly PropertyInfo TargetOffsetsProperty =
-        AccessTools.Property(typeof(Navigator), nameof(Navigator.targetOffsets));
-
-    public struct OriginalDestination
-    {
-        public KMonoBehaviour Target;
-        public CellOffset[] Offsets;
-        public KMonoBehaviour ForcedTarget;
-        public bool WasForced;
-    }
-
-    public static void Prefix(Navigator __instance, out OriginalDestination __state)
-    {
-        __state = default;
-        MinionIdentity minion = __instance != null ? __instance.GetComponent<MinionIdentity>() : null;
-        if (!ParkingSignController.TryGetForcedDestination(minion,
-                out KMonoBehaviour destination, out CellOffset[] offsets))
-        {
-            return;
-        }
-
-        __state.Target = __instance.target;
-        __state.Offsets = __instance.targetOffsets;
-        __state.ForcedTarget = destination;
-        __state.WasForced = true;
-        __instance.target = destination;
-        TargetOffsetsProperty.SetValue(__instance, offsets);
-    }
-
-    public static Exception Finalizer(Navigator __instance, OriginalDestination __state, Exception __exception)
-    {
-        if (!__state.WasForced || __instance == null)
-        {
-            return __exception;
-        }
-
-        if (__instance.target == __state.ForcedTarget)
-        {
-            __instance.target = __state.Target;
-            TargetOffsetsProperty.SetValue(__instance, __state.Offsets);
-        }
-
-        return __exception;
     }
 }

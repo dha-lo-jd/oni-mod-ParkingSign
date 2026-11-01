@@ -16,13 +16,7 @@ public sealed class ParkingSignController : KMonoBehaviour, ISaveLoadable, ISim1
         new Dictionary<int, ParkingSignController>();
 
     private static readonly HashSet<int> ReachabilityChecks = new HashSet<int>();
-    private static readonly CellOffset[] SignTargetOffsets = { new CellOffset(0, 0) };
-    private const int LogicValueChangedHash = -801688580;
     private static long nextSpawnOrder;
-
-    private static readonly EventSystem.IntraObjectHandler<ParkingSignController> LogicValueChangedDelegate =
-        new EventSystem.IntraObjectHandler<ParkingSignController>((component, data) =>
-            component.OnLogicValueChanged(data));
 
     [Serialize] private List<int> selectedMinionInstanceIds = new List<int>();
     [Serialize] private int priority = -1;
@@ -42,11 +36,6 @@ public sealed class ParkingSignController : KMonoBehaviour, ISaveLoadable, ISim1
 
     private const int MaxHangingDrop = 10;
     private const string MinionNavGridName = "MinionNavGrid";
-    private const int SelectObjectHash = (int)GameHashes.SelectObject;
-
-    private static readonly EventSystem.IntraObjectHandler<ParkingSignController> SelectDelegate =
-        new EventSystem.IntraObjectHandler<ParkingSignController>((component, data) =>
-            component.OnSelect(data));
 
     protected override void OnSpawn()
     {
@@ -59,7 +48,7 @@ public sealed class ParkingSignController : KMonoBehaviour, ISaveLoadable, ISim1
         if (isHanging)
         {
             SimAndRenderScheduler.instance.Add(this, false);
-            Subscribe(SelectObjectHash, SelectDelegate);
+            Subscribe((int)GameHashes.SelectObject, OnSelect);
         }
 
         RefreshSelectedProxyInstanceIds();
@@ -70,8 +59,7 @@ public sealed class ParkingSignController : KMonoBehaviour, ISaveLoadable, ISim1
 
         if (logicPorts == null || animController == null || selectable == null || prioritizable == null)
         {
-            Debug.LogError(
-                "[ParkingSign] " +
+            ParkingSignLog.Error(
                 $"Parking Sign '{name}' is missing a required logic port, animation controller, selectable, or prioritizable.");
             return;
         }
@@ -86,20 +74,8 @@ public sealed class ParkingSignController : KMonoBehaviour, ISaveLoadable, ISim1
             priority = -1;
         }
 
-        Subscribe(LogicValueChangedHash, LogicValueChangedDelegate);
+        Subscribe((int)GameHashes.LogicEvent, OnLogicValueChanged);
         UpdateAnimation();
-    }
-
-    internal static bool TryGetForcedDestination(MinionIdentity minion, out KMonoBehaviour destination,
-        out CellOffset[] offsets)
-    {
-        destination = null;
-        offsets = null;
-
-        // Redirecting a chore's destination makes it believe it arrived and work from the wrong cell.
-        // The winner is only recomputed on explicit reconciles: re-evaluating it here used stale path
-        // probes and flipped the cache back to a lower-priority sign.
-        return false;
     }
 
     internal static bool ShouldBlockPathFromSign(MinionIdentity minion, int destinationCell)
@@ -308,7 +284,7 @@ public sealed class ParkingSignController : KMonoBehaviour, ISaveLoadable, ISim1
         MinionIdentity minion = FindMinion(instanceId);
         ParkingSignController previousSign = GetCachedWinningSign(instanceId);
         ParkingSignController winningSign = FindWinningReachableSign(minion);
-        Debug.LogWarning($"[ParkingSign] Reconcile: minion={(minion != null ? minion.GetProperName() : "?")} " +
+        ParkingSignLog.Trace($"Reconcile: minion={(minion != null ? minion.GetProperName() : "?")} " +
                          $"cell={(minion != null ? Grid.PosToCell(minion.gameObject) : -1)} " +
                          $"previous={DescribeSign(previousSign)} winner={DescribeSign(winningSign)} " +
                          $"chore={GetChoreName(minion)}");
@@ -378,7 +354,7 @@ public sealed class ParkingSignController : KMonoBehaviour, ISaveLoadable, ISim1
 
                 int signTargetCell = sign.targetCell;
                 bool canReach = Grid.IsValidCell(signTargetCell) && navigator.CanReach(signTargetCell);
-                Debug.LogWarning($"[ParkingSign] Candidate: minion={minion.GetProperName()} sign={DescribeSign(sign)} " +
+                ParkingSignLog.Trace($"Candidate: minion={minion.GetProperName()} sign={DescribeSign(sign)} " +
                                  $"canReach={canReach} probeBlocked={probeBlocked} cached={DescribeSign(cachedWinner)}");
                 if (Grid.IsValidCell(signTargetCell) &&
                     (currentCell == signTargetCell || canReach ||
@@ -491,20 +467,20 @@ public sealed class ParkingSignController : KMonoBehaviour, ISaveLoadable, ISim1
             return;
         }
 
-        Debug.LogWarning($"[ParkingSign] MoveMinionToSign: sign={name} isHanging={isHanging} " +
+        ParkingSignLog.Trace($"MoveMinionToSign: sign={name} isHanging={isHanging} " +
                   $"minion={minion.GetProperName()} minionCell={Grid.PosToCell(minion.gameObject)} " +
                   $"targetCell={targetCell} signCell={Grid.PosToCell(gameObject)}");
 
         Navigator navigator = minion.GetComponent<Navigator>();
         if (navigator == null)
         {
-            Debug.LogWarning($"[ParkingSign] Cannot move {minion.GetProperName()}: no Navigator component.");
+            ParkingSignLog.Warn($"Cannot move {minion.GetProperName()}: no Navigator component.");
             return;
         }
 
         if (!Grid.IsValidCell(targetCell))
         {
-            Debug.LogWarning($"[ParkingSign] '{name}' has an invalid destination cell.");
+            ParkingSignLog.Warn($"'{name}' has an invalid destination cell.");
             return;
         }
 
@@ -512,7 +488,7 @@ public sealed class ParkingSignController : KMonoBehaviour, ISaveLoadable, ISim1
             navigator.GetSMI<MoveToLocationMonitor.Instance>();
         if (moveMonitor == null)
         {
-            Debug.LogWarning($"[ParkingSign] Cannot move {minion.GetProperName()}: move monitor is unavailable.");
+            ParkingSignLog.Warn($"Cannot move {minion.GetProperName()}: move monitor is unavailable.");
             return;
         }
 
@@ -553,7 +529,7 @@ public sealed class ParkingSignController : KMonoBehaviour, ISaveLoadable, ISim1
             return;
         }
 
-        Debug.LogWarning($"[ParkingSign] ReleaseMinion: sign={name} minion={minion.GetProperName()} " +
+        ParkingSignLog.Trace($"ReleaseMinion: sign={name} minion={minion.GetProperName()} " +
                          $"cell={Grid.PosToCell(minion.gameObject)} targetCell={targetCell} signCell={Grid.PosToCell(gameObject)}");
 
         Navigator navigator = minion.GetComponent<Navigator>();
@@ -599,15 +575,17 @@ public sealed class ParkingSignController : KMonoBehaviour, ISaveLoadable, ISim1
             ReconcileSelectedMinions();
         }
 
+#if DEBUG
         foreach (int instanceId in selectedMinionInstanceIds)
         {
             MinionIdentity member = FindMinion(instanceId);
             if (member != null)
             {
-                Debug.LogWarning($"[ParkingSign] Tick: sign={name} minion={member.GetProperName()} " +
-                                 $"cell={Grid.PosToCell(member.gameObject)} targetCell={targetCell} chore={GetChoreName(member)}");
+                ParkingSignLog.Trace($"Tick: sign={name} minion={member.GetProperName()} " +
+                                     $"cell={Grid.PosToCell(member.gameObject)} targetCell={targetCell} chore={GetChoreName(member)}");
             }
         }
+#endif
 
         UpdateGhost(IsSelected());
     }
@@ -685,11 +663,6 @@ public sealed class ParkingSignController : KMonoBehaviour, ISaveLoadable, ISim1
         UpdateGhost(selected);
     }
 
-    private void UpdateGhost()
-    {
-        UpdateGhost(ghost != null && ghost.activeSelf);
-    }
-
     private void UpdateGhost(bool show)
     {
         if (!show || !isHanging || !Grid.IsValidCell(targetCell))
@@ -704,7 +677,7 @@ public sealed class ParkingSignController : KMonoBehaviour, ISaveLoadable, ISim1
 
         if (ghost == null)
         {
-            ghost = CreateGhost();
+            ghost = ParkingSignGhostFactory.Create();
             if (ghost == null)
             {
                 return;
@@ -713,108 +686,6 @@ public sealed class ParkingSignController : KMonoBehaviour, ISaveLoadable, ISim1
 
         ghost.transform.SetPosition(Grid.CellToPosCBC(targetCell, Grid.SceneLayer.FXFront2));
         ghost.SetActive(true);
-    }
-
-    private static GameObject CreateGhost()
-    {
-        Sprite vanilla = Assets.GetSprite("ui_duplicant_any_selection");
-        Shader shader = Shader.Find("Sprites/Default") ?? Shader.Find("UI/Default");
-        if (vanilla != null && shader != null)
-        {
-            GameObject root = new GameObject("ParkingSignGhost");
-            root.SetActive(false);
-            GameObject child = new GameObject("Sprite");
-            child.transform.SetParent(root.transform, false);
-            SpriteRenderer renderer = child.AddComponent<SpriteRenderer>();
-            renderer.sprite = vanilla;
-            renderer.material = new Material(shader);
-            renderer.color = new Color(0.65f, 1f, 0.65f, 0.5f);
-            renderer.sortingOrder = 1000;
-            float scale = 1.6f / Mathf.Max(vanilla.bounds.size.y, 0.0001f);
-            child.transform.localScale = new Vector3(scale, scale, 1f);
-            child.transform.localPosition = new Vector3(0f, vanilla.bounds.extents.y * scale, 0f);
-            return root;
-        }
-
-        Debug.LogWarning("[ParkingSign] ui_duplicant_any_selection unavailable, using animation ghost.");
-        return CreateAnimGhost();
-    }
-
-    private static GameObject CreateAnimGhost()
-    {
-        KAnimFile build = Assets.GetAnim("body_comp_default_kanim");
-        KAnimFile anim = Assets.GetAnim("anim_idles_default_kanim");
-        if (build == null || anim == null)
-        {
-            Debug.LogWarning("[ParkingSign] Duplicant animation unavailable, using fallback silhouette.");
-            return CreateSpriteGhost();
-        }
-
-        GameObject go = new GameObject("ParkingSignGhost");
-        go.SetActive(false);
-        KBatchedAnimController controller = go.AddComponent<KBatchedAnimController>();
-        controller.AnimFiles = new[] { build, anim };
-        controller.isMovable = true;
-        controller.initialAnim = "idle_default";
-        controller.initialMode = KAnim.PlayMode.Loop;
-        controller.sceneLayer = Grid.SceneLayer.FXFront2;
-        controller.visibilityType = KAnimControllerBase.VisibilityType.Always;
-        controller.TintColour = new Color32(0, 0, 0, 150);
-        return go;
-    }
-
-    private static GameObject CreateSpriteGhost()
-    {
-        Shader shader = Shader.Find("Sprites/Default") ?? Shader.Find("UI/Default");
-        if (shader == null)
-        {
-            Debug.LogWarning("[ParkingSign] no shader available for the Duplicant silhouette.");
-            return null;
-        }
-
-        GameObject go = new GameObject("ParkingSignGhost");
-        go.SetActive(false);
-        SpriteRenderer renderer = go.AddComponent<SpriteRenderer>();
-        renderer.sprite = GetSilhouetteSprite();
-        renderer.material = new Material(shader);
-        renderer.color = new Color(0f, 0f, 0f, 0.55f);
-        renderer.sortingOrder = 1000;
-        go.layer = LayerMask.NameToLayer("Default");
-        return go;
-    }
-
-    private static Sprite silhouetteSprite;
-
-    private static Sprite GetSilhouetteSprite()
-    {
-        if (silhouetteSprite != null)
-        {
-            return silhouetteSprite;
-        }
-
-        const int width = 24;
-        const int height = 40;
-        Texture2D texture = new Texture2D(width, height, TextureFormat.RGBA32, false)
-        {
-            filterMode = FilterMode.Bilinear
-        };
-        Color32 clear = new Color32(0, 0, 0, 0);
-        Color32 solid = new Color32(255, 255, 255, 255);
-        for (int y = 0; y < height; y++)
-        {
-            for (int x = 0; x < width; x++)
-            {
-                bool head = (x - 12) * (x - 12) + (y - 33) * (y - 33) <= 36;
-                bool body = x >= 6 && x < 18 && y >= 14 && y < 27;
-                bool arms = (x >= 3 && x < 6 || x >= 18 && x < 21) && y >= 15 && y < 27;
-                bool legs = (x >= 7 && x < 11 || x >= 13 && x < 17) && y < 14;
-                texture.SetPixel(x, y, head || body || arms || legs ? solid : clear);
-            }
-        }
-
-        texture.Apply();
-        silhouetteSprite = Sprite.Create(texture, new Rect(0, 0, width, height), new Vector2(0.5f, 0f), 32f);
-        return silhouetteSprite;
     }
 
     protected override void OnCleanUp()

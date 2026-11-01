@@ -1,4 +1,4 @@
-﻿using UnityEngine;
+using UnityEngine;
 
 namespace ParkingSign;
 
@@ -31,7 +31,6 @@ public sealed class HangingParkingSignConfig : IBuildingConfig
 
     public override void DoPostConfigureComplete(GameObject go)
     {
-        go.AddOrGet<Prioritizable>();
-        go.AddOrGet<ParkingSignController>();
+        ParkingSignConfig.ConfigureCompleteBuilding(go);
     }
 }

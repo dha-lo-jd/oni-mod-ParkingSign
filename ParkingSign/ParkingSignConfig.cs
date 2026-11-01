@@ -31,6 +31,11 @@ public sealed class ParkingSignConfig : IBuildingConfig
 
     public override void DoPostConfigureComplete(GameObject go)
     {
+        ConfigureCompleteBuilding(go);
+    }
+
+    internal static void ConfigureCompleteBuilding(GameObject go)
+    {
         go.AddOrGet<Prioritizable>();
         go.AddOrGet<ParkingSignController>();
     }
