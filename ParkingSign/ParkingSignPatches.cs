@@ -83,7 +83,7 @@ public static class Grid_HasPermission_ParkingSign_Patch
 
     public static bool Prefix(int cell, int minionInstanceID, int fromCell, ref bool __result)
     {
-        if (!ParkingSignController.ShouldBlockPathFromSign(minionInstanceID, fromCell, cell))
+        if (!ParkingSignRegistry.ShouldBlockPathFromSign(minionInstanceID, fromCell, cell))
         {
             return true;
         }
@@ -104,7 +104,7 @@ public static class Navigator_CanReach_ParkingSign_Patch
     public static bool Prefix(Navigator __instance, int __0, ref bool __result)
     {
         MinionIdentity minion = __instance != null ? __instance.GetComponent<MinionIdentity>() : null;
-        if (!ParkingSignController.ShouldBlockPathFromSign(minion, __0))
+        if (!ParkingSignRegistry.ShouldBlockPathFromSign(minion, __0))
         {
             return true;
         }
@@ -119,7 +119,7 @@ public static class MoveToLocationMonitor_MoveToLocation_ParkingSign_Patch
 {
     public static void Prefix(MoveToLocationMonitor.Instance __instance, ref int cell)
     {
-        if (ParkingSignController.TryGetGuidanceCell(__instance.gameObject, out int guidanceCell) &&
+        if (ParkingSignRegistry.TryGetGuidanceCell(__instance.gameObject, out int guidanceCell) &&
             cell != guidanceCell)
         {
             ParkingSignLog.Trace($"MoveToLocation overridden: requested={cell} guidance={guidanceCell}");
@@ -133,7 +133,7 @@ public static class ChoreConsumer_FindNextChore_ParkingSign_Patch
 {
     public static void Postfix(ChoreConsumer __instance, ref bool __result, ref Chore.Precondition.Context out_context)
     {
-        if (!ParkingSignController.TryGetGuidanceCell(__instance.gameObject, out int guidanceCell) ||
+        if (!ParkingSignRegistry.TryGetGuidanceCell(__instance.gameObject, out int guidanceCell) ||
             Grid.PosToCell(__instance.gameObject) == guidanceCell)
         {
             return;
@@ -171,7 +171,7 @@ public static class ChoreDriver_SetChore_ParkingSign_Patch
     public static bool Prefix(ChoreDriver __instance, Chore.Precondition.Context context)
     {
         if (context.chore == null || context.chore.choreType == Db.Get().ChoreTypes.MoveTo ||
-            !ParkingSignController.IsHeadingToGuidanceCell(__instance.gameObject))
+            !ParkingSignRegistry.IsHeadingToGuidanceCell(__instance.gameObject))
         {
             return true;
         }
