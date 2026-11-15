@@ -14,4 +14,4 @@ Build from the solution directory:
 dotnet build .\ParkingSign.sln
 ```
 
-When `ModInstallPath` is configured, the build copies the mod DLL, `PLib.dll` (when present), `mod_info.yaml`, and `mod.yaml` to that local mod directory. PO translation files in `strings` are copied to the mod's `strings` directory.
+When `ModInstallPath` is configured, the build copies the mod DLL, `PLib.dll` (when present), `mod_info.yaml`, and `mod.yaml` to that local mod directory. PO translation files in `translations` are copied to the mod's `translations` directory.
