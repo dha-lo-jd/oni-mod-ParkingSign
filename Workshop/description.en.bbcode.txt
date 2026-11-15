@@ -1,0 +1,29 @@
+[h1]Parking Sign[/h1]
+
+Adds two signs to the [b]Utilities[/b] menu that call chosen Duplicants over to a spot and keep them there: the floor-mounted [b]Parking Sign[/b] and the ceiling-mounted [b]Hanging Parking Sign[/b]. Set each sign's priority with the priority tool, and check the Duplicants you want to assign to it.
+
+[h2]Features[/h2]
+[list]
+[*] When a sign receives a [b]green automation signal[/b], it calls the checked Duplicants over. Turn the signal off, or uncheck a Duplicant in the sign's settings, to let them move elsewhere
+[*] Duplicants head to the [b]highest-priority sign[/b] they can reach. If it becomes unreachable, the next-highest reachable sign takes over
+[*] Once they arrive, they wait there and can still perform any work [b]within reach of their position[/b]
+[*] The [b]Parking Sign[/b] is placed on a floor. The [b]Hanging Parking Sign[/b] is placed on a ceiling tile (no floor needed) and calls Duplicants to the floor or ladder directly beneath it
+[*] Both signs are [b]1x1[/b] and cost [b]25 kg[/b] of [b]Raw Mineral[/b]
+[*] Use the game's standard [b]priority tool[/b] to set a sign's priority. Signs with equal priority favor the one built first
+[*] Checked Duplicants and priorities are [b]saved[/b] with the building
+[*] English and Japanese
+[/list]
+
+[h2]Notes[/h2]
+[list]
+[*] A Duplicant that is called to a sign does not start work at a spot it cannot reach: a redirected arrival does not count as arriving at the original task's destination.
+[*] If no checked, active sign is reachable, no sign attracts the Duplicant.
+[*] When the signal turns red or a Duplicant is unchecked, the current destination is discarded and the game assigns a fresh task as usual.
+[*] A Hanging Parking Sign needs a standable tile within 10 tiles below it; otherwise it shows a "No standing tile" status.
+[/list]
+
+[h2]Credits[/h2]
+Uses [b]PLib[/b] by Peter Han (MIT License) for the translation; it is bundled in the mod, so nothing else needs to be installed.
+
+[h2]Source[/h2]
+[url=https://github.com/dha-lo-jd/oni-mod-ParkingSign]GitHub[/url] (MIT License)
