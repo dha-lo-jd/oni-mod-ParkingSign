@@ -124,7 +124,7 @@ public static class MoveToLocationMonitor_MoveToLocation_ParkingSign_Patch
         if (ParkingSignController.TryGetGuidanceCell(__instance.gameObject, out int guidanceCell) &&
             cell != guidanceCell)
         {
-            Debug.LogWarning($"[ParkingSign] MoveToLocation overridden: requested={cell} guidance={guidanceCell}");
+            Trace.Log($"[ParkingSign] MoveToLocation overridden: requested={cell} guidance={guidanceCell}");
             cell = guidanceCell;
         }
     }

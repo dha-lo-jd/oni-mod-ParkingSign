@@ -11,7 +11,7 @@ public sealed class ParkingSignMod : UserMod2
     public override void OnLoad(Harmony harmony)
     {
         base.OnLoad(harmony);
-        Debug.LogWarning("[ParkingSign] OnLoad: debug build with entry logs loaded.");
+        Trace.Log("[ParkingSign] OnLoad: debug build with entry logs loaded.");
         PUtil.InitLibrary();
         new PLocalization().Register();
     }

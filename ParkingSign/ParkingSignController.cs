@@ -308,7 +308,7 @@ public sealed class ParkingSignController : KMonoBehaviour, ISaveLoadable, ISim1
         MinionIdentity minion = FindMinion(instanceId);
         ParkingSignController previousSign = GetCachedWinningSign(instanceId);
         ParkingSignController winningSign = FindWinningReachableSign(minion);
-        Debug.LogWarning($"[ParkingSign] Reconcile: minion={(minion != null ? minion.GetProperName() : "?")} " +
+        Trace.Log($"[ParkingSign] Reconcile: minion={(minion != null ? minion.GetProperName() : "?")} " +
                          $"cell={(minion != null ? Grid.PosToCell(minion.gameObject) : -1)} " +
                          $"previous={DescribeSign(previousSign)} winner={DescribeSign(winningSign)} " +
                          $"chore={GetChoreName(minion)}");
@@ -378,7 +378,7 @@ public sealed class ParkingSignController : KMonoBehaviour, ISaveLoadable, ISim1
 
                 int signTargetCell = sign.targetCell;
                 bool canReach = Grid.IsValidCell(signTargetCell) && navigator.CanReach(signTargetCell);
-                Debug.LogWarning($"[ParkingSign] Candidate: minion={minion.GetProperName()} sign={DescribeSign(sign)} " +
+                Trace.Log($"[ParkingSign] Candidate: minion={minion.GetProperName()} sign={DescribeSign(sign)} " +
                                  $"canReach={canReach} probeBlocked={probeBlocked} cached={DescribeSign(cachedWinner)}");
                 if (Grid.IsValidCell(signTargetCell) &&
                     (currentCell == signTargetCell || canReach ||
@@ -491,7 +491,7 @@ public sealed class ParkingSignController : KMonoBehaviour, ISaveLoadable, ISim1
             return;
         }
 
-        Debug.LogWarning($"[ParkingSign] MoveMinionToSign: sign={name} isHanging={isHanging} " +
+        Trace.Log($"[ParkingSign] MoveMinionToSign: sign={name} isHanging={isHanging} " +
                   $"minion={minion.GetProperName()} minionCell={Grid.PosToCell(minion.gameObject)} " +
                   $"targetCell={targetCell} signCell={Grid.PosToCell(gameObject)}");
 
@@ -553,7 +553,7 @@ public sealed class ParkingSignController : KMonoBehaviour, ISaveLoadable, ISim1
             return;
         }
 
-        Debug.LogWarning($"[ParkingSign] ReleaseMinion: sign={name} minion={minion.GetProperName()} " +
+        Trace.Log($"[ParkingSign] ReleaseMinion: sign={name} minion={minion.GetProperName()} " +
                          $"cell={Grid.PosToCell(minion.gameObject)} targetCell={targetCell} signCell={Grid.PosToCell(gameObject)}");
 
         Navigator navigator = minion.GetComponent<Navigator>();
@@ -604,7 +604,7 @@ public sealed class ParkingSignController : KMonoBehaviour, ISaveLoadable, ISim1
             MinionIdentity member = FindMinion(instanceId);
             if (member != null)
             {
-                Debug.LogWarning($"[ParkingSign] Tick: sign={name} minion={member.GetProperName()} " +
+                Trace.Log($"[ParkingSign] Tick: sign={name} minion={member.GetProperName()} " +
                                  $"cell={Grid.PosToCell(member.gameObject)} targetCell={targetCell} chore={GetChoreName(member)}");
             }
         }
