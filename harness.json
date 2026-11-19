@@ -1,0 +1,5 @@
+{
+  "build": ["dotnet build ParkingSign.sln -v q -p:ModInstallPath=F:/_System/Documents/Klei/OxygenNotIncluded/mods/local/ParkingSign"],
+  "required_mods": ["ParkingSign.Local"],
+  "save": "05 all research.sav"
+}

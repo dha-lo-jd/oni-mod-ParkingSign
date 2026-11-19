@@ -1,5 +1,3 @@
-using System;
-using System.Collections.Generic;
 using HarmonyLib;
 using PeterHan.PLib.UI;
 using System.Reflection;
@@ -85,7 +83,7 @@ public static class Grid_HasPermission_ParkingSign_Patch
 
     public static bool Prefix(int cell, int minionInstanceID, int fromCell, ref bool __result)
     {
-        if (!ParkingSignController.ShouldBlockPathFromSign(minionInstanceID, fromCell, cell))
+        if (!ParkingSignRegistry.ShouldBlockPathFromSign(minionInstanceID, fromCell, cell))
         {
             return true;
         }
@@ -106,7 +104,7 @@ public static class Navigator_CanReach_ParkingSign_Patch
     public static bool Prefix(Navigator __instance, int __0, ref bool __result)
     {
         MinionIdentity minion = __instance != null ? __instance.GetComponent<MinionIdentity>() : null;
-        if (!ParkingSignController.ShouldBlockPathFromSign(minion, __0))
+        if (!ParkingSignRegistry.ShouldBlockPathFromSign(minion, __0))
         {
             return true;
         }
@@ -121,10 +119,10 @@ public static class MoveToLocationMonitor_MoveToLocation_ParkingSign_Patch
 {
     public static void Prefix(MoveToLocationMonitor.Instance __instance, ref int cell)
     {
-        if (ParkingSignController.TryGetGuidanceCell(__instance.gameObject, out int guidanceCell) &&
+        if (ParkingSignRegistry.TryGetGuidanceCell(__instance.gameObject, out int guidanceCell) &&
             cell != guidanceCell)
         {
-            Trace.Log($"[ParkingSign] MoveToLocation overridden: requested={cell} guidance={guidanceCell}");
+            ParkingSignLog.Trace($"MoveToLocation overridden: requested={cell} guidance={guidanceCell}");
             cell = guidanceCell;
         }
     }
@@ -135,7 +133,7 @@ public static class ChoreConsumer_FindNextChore_ParkingSign_Patch
 {
     public static void Postfix(ChoreConsumer __instance, ref bool __result, ref Chore.Precondition.Context out_context)
     {
-        if (!ParkingSignController.TryGetGuidanceCell(__instance.gameObject, out int guidanceCell) ||
+        if (!ParkingSignRegistry.TryGetGuidanceCell(__instance.gameObject, out int guidanceCell) ||
             Grid.PosToCell(__instance.gameObject) == guidanceCell)
         {
             return;
@@ -173,60 +171,11 @@ public static class ChoreDriver_SetChore_ParkingSign_Patch
     public static bool Prefix(ChoreDriver __instance, Chore.Precondition.Context context)
     {
         if (context.chore == null || context.chore.choreType == Db.Get().ChoreTypes.MoveTo ||
-            !ParkingSignController.IsHeadingToGuidanceCell(__instance.gameObject))
+            !ParkingSignRegistry.IsHeadingToGuidanceCell(__instance.gameObject))
         {
             return true;
         }
 
         return false;
-    }
-}
-
-[HarmonyPatch(typeof(Navigator), nameof(Navigator.AdvancePath))]
-public static class Navigator_AdvancePath_ParkingSign_Patch
-{
-    private static readonly PropertyInfo TargetOffsetsProperty =
-        AccessTools.Property(typeof(Navigator), nameof(Navigator.targetOffsets));
-
-    public struct OriginalDestination
-    {
-        public KMonoBehaviour Target;
-        public CellOffset[] Offsets;
-        public KMonoBehaviour ForcedTarget;
-        public bool WasForced;
-    }
-
-    public static void Prefix(Navigator __instance, out OriginalDestination __state)
-    {
-        __state = default;
-        MinionIdentity minion = __instance != null ? __instance.GetComponent<MinionIdentity>() : null;
-        if (!ParkingSignController.TryGetForcedDestination(minion,
-                out KMonoBehaviour destination, out CellOffset[] offsets))
-        {
-            return;
-        }
-
-        __state.Target = __instance.target;
-        __state.Offsets = __instance.targetOffsets;
-        __state.ForcedTarget = destination;
-        __state.WasForced = true;
-        __instance.target = destination;
-        TargetOffsetsProperty.SetValue(__instance, offsets);
-    }
-
-    public static Exception Finalizer(Navigator __instance, OriginalDestination __state, Exception __exception)
-    {
-        if (!__state.WasForced || __instance == null)
-        {
-            return __exception;
-        }
-
-        if (__instance.target == __state.ForcedTarget)
-        {
-            __instance.target = __state.Target;
-            TargetOffsetsProperty.SetValue(__instance, __state.Offsets);
-        }
-
-        return __exception;
     }
 }

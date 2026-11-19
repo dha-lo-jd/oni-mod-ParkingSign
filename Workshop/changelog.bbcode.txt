@@ -1,5 +1,17 @@
 [h1]Changelog / 更新履歴[/h1]
 
+[h2]1.0.4[/h2]
+[b]English[/b]
+[list]
+[*] Updated for the U60 release of Oxygen Not Included (internal restructuring; no change to how the signs behave).
+[*] Fixed a duplicant staying assigned to an unreachable sign: when the chosen sign becomes unreachable (for example walled off), the next-highest-priority reachable sign now takes over within about a second.
+[/list]
+[b]日本語[/b]
+[list]
+[*] Oxygen Not Included の U60 に対応しました（内部構造の整理。看板の挙動は変わりません）。
+[*] 選ばれた看板に行けなくなった（壁で囲まれた等）とき、複製人間がその看板に割り当てられたままになる問題を修正しました。1 秒ほどで、次に優先度の高い行ける看板に切り替わります。
+[/list]
+
 [h2]1.0.3[/h2]
 [b]English[/b]
 [list]
